@@ -359,17 +359,12 @@ local function new_router(version)
     end
   end
 
-  -- We need to detect router changes if there is some one modifying the routers,
-  -- like rebuild_router_timer. And it relies on core_cache to detect changes.
-  --
-  -- 1. stratey off (dbless)
-  --      incremental_sync on:
-  --             non init worker: true(kong.core_cache)
-  --                 init worker: false
-  --      incremental_sync off:   false
-  -- 2. strategy on (non dbless): true(kong.core_cache)
-  local detect_changes = kong.core_cache and
-          (db.strategy ~= "off" or (kong.sync and get_phase() ~= "init_worker"))
+  local detect_changes = kong.core_cache and true
+
+  -- for dbless we will not check changes when initing
+  if db.strategy == "off" and get_phase() == "init_worker" then
+    detect_changes = false
+  end
 
   local counter = 0
   local page_size = db.routes.pagination.max_page_size
@@ -984,10 +979,7 @@ return {
         end
       end
 
-      -- start some rebuild timers for
-      -- 1. traditional mode
-      -- 2. DP with incremental sync on (dbless mode)
-      if strategy ~= "off" or kong.sync then
+      do  -- start some rebuild timers
         local worker_state_update_frequency = kong.configuration.worker_state_update_frequency or 1
 
         local router_async_opts = {
