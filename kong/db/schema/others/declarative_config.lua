@@ -626,7 +626,8 @@ local function generate_ids(input, known_entities, parent_entity)
     local child_key
     if parent_entity then
       local parent_schema = all_schemas[parent_entity]
-      if parent_schema.fields[entity] then
+      local entity_field = parent_schema.fields[entity]
+      if entity_field and not entity_field.transient then
         goto continue
       end
       parent_fk = parent_schema:extract_pk_values(input)
@@ -663,7 +664,8 @@ local function populate_ids_for_validation(input, known_entities, parent_entity,
     local child_key
     if parent_entity then
       local parent_schema = all_schemas[parent_entity]
-      if parent_schema.fields[entity] then
+      local entity_field = parent_schema.fields[entity]
+      if entity_field and not entity_field.transient then
         goto continue
       end
       parent_fk = parent_schema:extract_pk_values(input)

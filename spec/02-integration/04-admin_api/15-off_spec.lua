@@ -536,6 +536,81 @@ describe("Admin API #off", function()
         assert.equals(snis.certificate.id, certificates.id)
       end)
 
+      it("certificates should be auto-related with attached snis when input requires multiple population steps", function()
+        -- FTI-6351
+        --
+        -- The presence of `consumers[1].basicauth_credentials[1]` here means
+        -- that the initial validation of the "raw" input will fail due to an
+        -- entity check which relies upon a field that will be automatically
+        -- populated later on (`consumer.id`):
+        --
+        --```lua
+        -- fields = {
+        --   consumers = {
+        --     {
+        --       basicauth_credentials = {
+        --         {
+        --           ["@entity"] = {
+        --             "all or none of these fields must be set: 'password', 'consumer.id'"
+        --           }
+        --         }
+        --       }
+        --     }
+        --   }
+        -- }
+        --```
+        --
+        -- ...when initial validation fails, the declarative schema code runs
+        -- code to auto-populate things like parent IDs for foreign relationships
+        -- that are represented by nested arrays in the input before re-running
+        -- the validation.
+        --
+        -- This test targets that case, ensuring that foreign relationships for
+        -- `certificates[].snis` are populated correctly in that code path.
+
+        local cert_id = uuid()
+        local sni_id = uuid()
+
+        local res = client:post("/config", {
+          body = {
+            _format_version = "1.1",
+            consumers = {
+              {
+                username = "x",
+                basicauth_credentials = {
+                  {
+                    username = "x",
+                    password = "x",
+                  }
+                }
+              }
+            },
+            certificates = {
+              {
+                id = cert_id,
+                cert = ssl_fixtures.cert,
+                key = ssl_fixtures.key,
+                snis = {
+                  {
+                    id = sni_id,
+                    name = "foo.example",
+                  },
+                }
+              }
+            },
+          },
+          headers = {
+            ["Content-Type"] = "application/json"
+          }
+        })
+
+        local body = assert.response(res).has.status(201)
+        local entities = cjson.decode(body)
+        local cert = assert.is_table(entities.certificates[cert_id], "missing certificate in output")
+        local sni = assert.is_table(entities.snis[sni_id], "missing sni in output")
+        assert.equals(sni.certificate.id, cert.id)
+      end)
+
       it("can reload upstreams (regression test)", function()
         local config = [[
           _format_version: "1.1"
