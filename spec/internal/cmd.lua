@@ -322,11 +322,11 @@ local function start_kong(env, tables, preserve_prefix, fixtures)
   end
 
   assert(render_fixtures(CONSTANTS.TEST_CONF_PATH .. nginx_conf, env, prefix, fixtures))
-  -- execute has at most 4 return values
-  local r1, r2, r3, r4 = shell.kong_exec("start --conf " .. CONSTANTS.TEST_CONF_PATH .. nginx_conf .. nginx_conf_flags, env)
+  -- execute with return = nil, so it will returns either (false, stderr) or (true, stderr, stdout).
+  local ok, stderr, stdout = shell.kong_exec("start --conf " .. CONSTANTS.TEST_CONF_PATH .. nginx_conf .. nginx_conf_flags, env)
 
-  -- Check if `start_kong` is used for starting a data plane with rpc sync
-  if env and
+  -- Check if `start_kong` is used for starting a data plane with rpc sync when executed successfully
+  if ok and env and
     env.role and env.role == "data_plane" and
     env.cluster_rpc_sync and env.cluster_rpc_sync == "on"
   then
@@ -348,7 +348,7 @@ local function start_kong(env, tables, preserve_prefix, fixtures)
     end, 20) -- wait 20 seconds for DP start
   end
 
-  return r1, r2, r3, r4
+  return ok, stderr, stdout
 end
 
 
