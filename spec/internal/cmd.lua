@@ -24,6 +24,7 @@ local shell = require("spec.internal.shell")
 local DB = require("spec.internal.db")
 local pid = require("spec.internal.pid")
 local dns_mock = require("spec.internal.dns")
+local wait = require("spec.internal.wait")
 
 
 -- initialized in start_kong()
@@ -321,7 +322,33 @@ local function start_kong(env, tables, preserve_prefix, fixtures)
   end
 
   assert(render_fixtures(CONSTANTS.TEST_CONF_PATH .. nginx_conf, env, prefix, fixtures))
-  return shell.kong_exec("start --conf " .. CONSTANTS.TEST_CONF_PATH .. nginx_conf .. nginx_conf_flags, env)
+  -- execute has at most 4 return values
+  local r1, r2, r3, r4 = shell.kong_exec("start --conf " .. CONSTANTS.TEST_CONF_PATH .. nginx_conf .. nginx_conf_flags, env)
+
+  -- Check if `start_kong` is used for starting a data plane with rpc sync
+  if env and
+    env.role and env.role == "data_plane" and
+    env.cluster_rpc_sync and env.cluster_rpc_sync == "on"
+  then
+    wait.wait_until(function()
+      local fh = assert(io.open(prefix .. "/logs/error.log", "r"))
+      local found
+      local pattern = "[kong.sync.v2] full sync ends"
+
+      for line in fh:lines() do
+        if line:find(pattern, nil, true) ~= nil then
+          found = true
+          break
+        end
+      end
+
+      fh:close()
+
+      return found
+    end, 20) -- wait 20 seconds for DP start
+  end
+
+  return r1, r2, r3, r4
 end
 
 
